@@ -1,6 +1,7 @@
 const express = require('express')
 const sqlite3 = require('sqlite3')
 const cors = require('cors');
+const bodyParser = require('body-parser');
 
 
 const app = express()
@@ -8,6 +9,8 @@ const port = 5001;
 var db = new sqlite3.Database('crmServer.db');
 
 app.use(cors());
+app.use(express.urlencoded({ extend:true, 'limit': '50mb', parameterLimit:50000 }))
+app.use(bodyParser.json({limit: '50mb'}));
 
 app.get('/outgoingInvoices',(req, res) => {
     res.setHeader('Content-Type', 'application/json');
@@ -47,6 +50,53 @@ app.get('/getProductbyInvoice_id', (req, res) => {
         });
         
 });
+
+app.post("/addOutgoingInvoice", (req, res) => {
+    let invoice_info = req.body.invoice;
+    console.log(invoice_info);
+
+    db.run('INSERT INTO outgoingInvoices (date, client, invoiceValue, invoiceState, type, typeOfPayment) VALUES (?, ?, ?, ?, ?, ?)', 
+    [invoice_info.date, invoice_info.client, invoice_info.total_value, 0, invoice_info.type, invoice_info.typeOfPayment], 
+    function(err) {
+        if (err) {
+            console.error('Error inserting data:', err);
+            return res.status(500).send('Error inserting invoice');
+        }
+
+        console.log(`Data inserted successfully with ID: ${this.lastID}`);
+        
+        // Iterate over the products and validate them
+        invoice_info.products.forEach((product) => {
+            // Validate product fields (name, price, quantity)
+            if (product.name == '' || product.price === 0 || product.quantity === 0) {
+                console.log(`Skipping product due to missing fields: ${JSON.stringify(product)}`);
+                return; 
+            } else {
+                // Insert valid product into the database
+                db.run('INSERT INTO product (invoice_id, name, quantity, price, discount) VALUES (?, ?, ?, ?, ?)', 
+                [this.lastID, product.name, product.quantity, product.price, product.discount], function(err) {
+                    if (err) {
+                        console.error('Error inserting product:', err);
+                    } else {
+                        console.log(`Product inserted: ${product.name}`);
+                    }
+                });
+            }
+        });
+
+        // Send response back after processing
+        res.end(JSON.stringify({"done": true}));
+    });
+});
+
+app.delete("/deleteOutgoingInvoices", (req, res) =>{
+    db.all("DELETE FROM outgoingInvoices WHERE uid = '"+ req.query.id +"'", [], (err, rows) => {
+        res.end(JSON.stringify({"done": true}));
+    });
+    // console.log(req.query);
+});
+
+
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
