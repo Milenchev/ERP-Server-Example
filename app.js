@@ -97,6 +97,33 @@ app.delete("/deleteOutgoingInvoices", (req, res) =>{
 });
 
 
+app.post("/addIncomingInvoice", (req, res) => {
+    let invoice_info = req.body.invoice;
+    console.log(invoice_info);
+
+    db.run('INSERT INTO incomingInvocies (expDate, date, supplier, invoiceValue, State, type, typeOfPayment) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+    [invoice_expDate, invoice_info.date, invoice_info.supplier, invoice_info.total_value, 0, invoice_info.type, invoice_info.typeOfPayment], 
+    function(err) {
+        if (err) {
+            console.error('Error inserting data:', err);
+            return res.status(500).send('Error inserting invoice');
+        }
+
+        console.log(`Data inserted successfully with ID: ${this.lastID}`);
+
+        // Send response back after processing
+        res.end(JSON.stringify({"done": true}));
+    });
+});
+
+app.delete("/deleteIncomingInvoices", (req, res) =>{
+    db.all("DELETE FROM incomingInvoices WHERE uid = '"+ req.query.id +"'", [], (err, rows) => {
+        res.end(JSON.stringify({"done": true}));
+    });
+    // console.log(req.query);
+});
+
+
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
