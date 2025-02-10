@@ -28,6 +28,24 @@ app.get('/incomingInvoices',(req, res) => {
     });
 });
 
+app.get('/clients', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+
+    db.all('SELECT * FROM clients', [], (err, rows) => {
+        res.end(JSON.stringify({ "clients": rows }));
+    });
+
+});
+
+app.get('/offers', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+
+    db.all('SELECT * FROM offers', [], (err, rows) => {
+        res.end(JSON.stringify({ "offers": rows }));
+    });
+
+});
+
 app.get('/getDashboardInvoices',(req, res) => {
     res.setHeader('Content-Type', 'application/json');
 
@@ -96,13 +114,67 @@ app.delete("/deleteOutgoingInvoices", (req, res) =>{
     // console.log(req.query);
 });
 
+app.delete("/deleteClients", (req, res) => {
+    db.all("DELETE FROM clients WHERE uid = '"+ req.query.id +"'", [], (err, rows) => {
+        res.end(JSON.stringify({"done": true}));
+    });
+})
+
+app.delete("/deleteOffers", (req, res) =>{
+    db.all("DELETE FROM offers WHERE uid = '"+ req.query.id +"'", [], (err, rows) => {
+        res.end(JSON.stringify({"done": true}));
+    });
+    // console.log(req.query);
+});
+
 
 app.post("/addIncomingInvoice", (req, res) => {
     let invoice_info = req.body.invoice;
     console.log(invoice_info);
 
-    db.run('INSERT INTO incomingInvocies (expDate, date, supplier, invoiceValue, State, type, typeOfPayment) VALUES (?, ?, ?, ?, ?, ?, ?)', 
-    [invoice_expDate, invoice_info.date, invoice_info.supplier, invoice_info.total_value, 0, invoice_info.type, invoice_info.typeOfPayment], 
+    db.run('INSERT INTO incomingInvoices (expDate, supplier, date, type, typeOfPayment, State, invoiceValue) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+    [invoice_info.expDate, invoice_info.supplierName, invoice_info.date,  invoice_info.type, invoice_info.typeOfPayment, 0, invoice_info.total_value], 
+    function(err) {
+        if (err) {
+            console.error('Error inserting data:', err);
+            return res.status(500).send('Error inserting invoice');
+        }
+
+        console.log(`Data inserted successfully with ID: ${this.lastID}`);
+
+        // Send response back after processing
+        res.end(JSON.stringify({"done": true}));
+    });
+});
+
+
+
+app.post("/addClients", (req, res) => {
+    let client_info = req.body.clients;
+    console.log(client_info);
+
+    db.run('INSERT INTO clients (firmName, clientName, mol, numDDS, adress, country, city, email, phoneNum, eik, clientType) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', 
+    [client_info.firmName, client_info.clientName, client_info.mol,  client_info.dds, client_info.address, client_info.country, client_info.city, client_info.email, client_info.phone, client_info.eik, 0], 
+    function(err) {
+        if (err) {
+            console.error('Error inserting data:', err);
+            return res.status(500).send('Error inserting invoice');
+        }
+
+        console.log(`Data inserted successfully with ID: ${this.lastID}`);
+
+        // Send response back after processing
+        res.end(JSON.stringify({"done": true}));
+    });
+});
+
+
+app.post("/addOffers", (req, res) => {
+    let offer_info = req.body;
+    console.log(offer_info);
+
+    db.run('INSERT INTO offers (clientName, mol, typeOfOffer,  dateOfOffer, heading, price, state) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+    [offer_info.clientName, offer_info.mol, offer_info.typeOfOffer, offer_info.dateOfOffer, offer_info.heading, offer_info.price, offer_info.state], 
     function(err) {
         if (err) {
             console.error('Error inserting data:', err);
