@@ -53,9 +53,22 @@ app.get("/storage", (req, res) => {
 
 app.get("/storageItems", (req, res) => {
     res.setHeader("Content-Type", "application/json");
-
-    db.all("SELECT * FROM storageItems", [], (err, rows) => {
+    console.log(req.query);
+    db.all("SELECT * FROM storageItems WHERE storage_id = '" + req.query.storage_id + "'", [], (err, rows) => {
         res.end(JSON.stringify({ storageItems: rows }));
+    });
+});
+
+app.get("/updateStorageItemStorage", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    db.run("UPDATE storageItems SET `storage_id` = ? WHERE `uid` = ?", [req.query.storage_id, req.query.item_id], function (err) {
+        if (err) {
+            console.error("Error inserting data:", err);
+            return res.status(500).send("Error inserting invoice");
+        }
+
+        // Send response back after processing
+        res.end(JSON.stringify({ done: true }));
     });
 });
 
@@ -266,6 +279,43 @@ app.post("/addClients", (req, res) => {
             res.end(JSON.stringify({ done: true }));
         }
     );
+});
+
+app.post("/addItems", (req, res) => {
+    let item_info = req.body.storageItems;
+
+    db.run(
+        "INSERT INTO storageItems (itemNum, itemName, Availability, storageType, type, position) VALUES (?, ?, ?, ?, ?, ?)",
+        [item_info.itemNum, item_info.itemName, item_info.Availability, item_info.storageType, item_info.type, item_info.position],
+        function (err) {
+            if (err) {
+                console.error("Error inserting data:", err);
+                return res.status(500).send("Error inserting invoice");
+            }
+
+            console.log(`Data inserted successfully with ID: ${this.lastID}`);
+
+            // Send response back after processing
+            res.end(JSON.stringify({ done: true }));
+        }
+    );
+});
+
+app.post("/addStorage", (req, res) => {
+    let storage_info = req.body.storageName;
+    console.log(storage_info);
+
+    db.run("INSERT INTO storage (storageName) VALUES (?)", [storage_info.storageName], function (err) {
+        if (err) {
+            console.error("Error inserting data:", err);
+            return res.status(500).send("Error inserting invoice");
+        }
+
+        console.log(`Data inserted successfully with ID: ${this.lastID}`);
+
+        // Send response back after processing
+        res.end(JSON.stringify({ done: true }));
+    });
 });
 
 // app.post("/addOffers", (req, res) => {
