@@ -53,7 +53,6 @@ app.get("/storage", (req, res) => {
 
 app.get("/storageItems", (req, res) => {
     res.setHeader("Content-Type", "application/json");
-    console.log(req.query);
     db.all("SELECT * FROM storageItems WHERE storage_id = '" + req.query.storage_id + "'", [], (err, rows) => {
         res.end(JSON.stringify({ storageItems: rows }));
     });
@@ -83,20 +82,41 @@ app.get("/getDashboardInvoices", (req, res) => {
 });
 
 app.get("/getProductbyInvoice_id", (req, res) => {
-    console.log("SOMEONE IS TRYING TO LOGIN!!!!!");
-    console.log(req.query);
     res.setHeader("Content-Type", "application/json");
     db.all("SELECT * FROM product WHERE invoice_id = '" + req.query.invoice_id + "'", [], (err, rows) => {
         res.end(JSON.stringify({ product: rows }));
     });
 });
 
-app.get("/offerProducts", (req, res) => {
+app.get("/getArticle_id", (req, res) => {
     res.setHeader("Content-Type", "application/json");
     console.log(req.query);
+    db.all("SELECT * FROM repairArticles WHERE repair_id = '" + req.query.repair_id + "'", [], (err, rows) => {
+        res.end(JSON.stringify({ repairArticles: rows }));
+    });
+});
+
+app.get("/offerProducts", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
     db.all("SELECT * FROM offerProducts WHERE offerId = '" + req.query.offerId + "'", [], (err, rows) => {
         console.log(rows);
         res.end(JSON.stringify({ offerProducts: rows }));
+    });
+});
+
+app.get("/repairs", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+
+    db.all("SELECT * FROM repairs", [], (err, rows) => {
+        res.end(JSON.stringify({ repairs: rows }));
+    });
+});
+
+app.get("/repairArticles", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+
+    db.all("SELECT * FROM repairArticles", [], (err, rows) => {
+        res.end(JSON.stringify({ repairArticles: rows }));
     });
 });
 
@@ -145,7 +165,6 @@ app.post("/addOutgoingInvoice", (req, res) => {
 
 app.post("/addOffers", (req, res) => {
     let offer_info = req.body.offer;
-    console.log(offer_info);
 
     db.run(
         "INSERT INTO offers (clientName, mol, typeOfOffer, dateOfOffer, heading, price, state) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -207,6 +226,14 @@ app.delete("/deleteClients", (req, res) => {
     });
 });
 
+app.delete("/deleteRepair", (req, res) => {
+    db.all("DELETE FROM repairs WHERE uid = '" + req.query.id + "'", [], (err, rows) => {
+        db.all("DELETE FROM repairArticles WHERE repair_id = '" + req.query.id + "'", [], (err, rows) => {
+            res.end(JSON.stringify({ done: true }));
+        });
+    });
+});
+
 app.delete("/deleteOffers", (req, res) => {
     db.all("DELETE FROM offers WHERE uid = '" + req.query.id + "'", [], (err, rows) => {
         res.end(JSON.stringify({ done: true }));
@@ -217,6 +244,51 @@ app.delete("/deleteStorageItems", (req, res) => {
     db.all("DELETE FROM storageItems WHERE uid = '" + req.query.id + "'", [], (err, rows) => {
         res.end(JSON.stringify({ done: true }));
     });
+});
+
+app.delete("/deleteStorage", async (req, res) => {
+    const storageId = req.query.id;
+
+    if (!storageId) {
+        return res.status(400).json({ error: "Missing storage ID" });
+    }
+
+    try {
+        db.run("UPDATE storageItems SET storage_id = -1 WHERE storage_id = ?", [storageId]);
+
+        const result = db.run("DELETE FROM storage WHERE uid = ?", [storageId]);
+
+        if (result.changes === 0) {
+            return res.status(404).json({ error: "Storage not found" });
+        }
+
+        res.json({ message: "Storage deleted successfully, and items updated" });
+    } catch (error) {
+        console.error("Error deleting storage:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+app.put("/updateStorageItems", async (req, res) => {
+    const { storageId, newStorageId } = req.body; // Get the old and new storage IDs
+
+    if (!storageId) {
+        return res.status(400).json({ error: "Missing storage ID" });
+    }
+
+    try {
+        // Update all items in the given storage to have a new storage_id (-1 by default)
+        const result = await db.run("UPDATE storageItems SET storage_id = ? WHERE storage_id = ?", [newStorageId || -1, storageId]);
+
+        if (result.changes === 0) {
+            return res.status(404).json({ error: "No items found in this storage" });
+        }
+
+        res.json({ message: `Items moved to storage ID ${newStorageId || -1}` });
+    } catch (error) {
+        console.error("Error updating storage items:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
 });
 
 app.post("/addIncomingInvoice", (req, res) => {
@@ -274,6 +346,51 @@ app.post("/addClients", (req, res) => {
             }
 
             console.log(`Data inserted successfully with ID: ${this.lastID}`);
+
+            // Send response back after processing
+            res.end(JSON.stringify({ done: true }));
+        }
+    );
+});
+
+app.post("/addRepair", (req, res) => {
+    let repair_info = req.body.repairs;
+
+    db.run(
+        "INSERT INTO repairs (client, arrivalDate, shipmentNum, sentDate, outgoingShipmentNum, Articles, state, serialNum) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            repair_info.client,
+            repair_info.arrivalDate,
+            repair_info.shipmentNum,
+            repair_info.sentDate,
+            repair_info.outgoingShipmentNum,
+            repair_info.articles,
+            repair_info.state,
+            "",
+        ],
+        function (err) {
+            if (err) {
+                console.error("Error inserting data:", err);
+                return res.status(500).send("Error inserting invoice");
+            }
+
+            console.log(`Data inserted successfully with ID: ${this.lastID}`);
+            repair_info.repairArticles.forEach((repair) => {
+                // Validate product fields (name, price, quantity)
+                if (repair.serialNum == "") {
+                    console.log(`Skipping product due to missing fields: ${JSON.stringify(repair)}`);
+                    return;
+                } else {
+                    // Insert valid product into the database
+                    db.run("INSERT INTO repairArticles (serialNum, repair_id) VALUES (?, ?)", [repair.serialNum, this.lastID], function (err) {
+                        if (err) {
+                            console.error("Error inserting product:", err);
+                        } else {
+                            console.log(`Product inserted: ${repair.serialNum}`);
+                        }
+                    });
+                }
+            });
 
             // Send response back after processing
             res.end(JSON.stringify({ done: true }));
