@@ -2,6 +2,8 @@ const express = require("express");
 const sqlite3 = require("sqlite3");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const port = 5001;
@@ -57,6 +59,14 @@ app.get("/getAllStorageItems", (req, res) => {
 
     db.all("SELECT * FROM storageItems", [], (err, rows) => {
         res.end(JSON.stringify({ storageItems: rows }));
+    });
+});
+
+app.get("/employees", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+
+    db.all("SELECT * FROM employees", [], (err, rows) => {
+        res.end(JSON.stringify({ employees: rows }));
     });
 });
 
@@ -284,9 +294,17 @@ app.put("/updateStorageItems", async (req, res) => {
 
 app.post("/addIncomingInvoice", (req, res) => {
     let invoice_info = req.body.invoice;
-
+    console.log(req.body);
+    if (invoice_info.base_64_file != "") {
+        // Decode Base64 and save the file
+        const buffer = Buffer.from(invoice_info.base_64_file, "base64");
+        let filePath = `uploads/${Date.now()}-invoice.pdf`; // Adjust extension as needed
+        const fileFullPath = path.join(__dirname, filePath);
+        fs.writeFileSync(fileFullPath, buffer);
+        invoice_info.invoiceFile = filePath;
+    }
     db.run(
-        "INSERT INTO incomingInvoices (expDate, supplier, date, type, typeOfPayment, State, invoiceValue) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO incomingInvoices (expDate, supplier, date, type, typeOfPayment, State, invoiceValue, filePath) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [
             invoice_info.expDate,
             invoice_info.supplierName,
@@ -295,6 +313,7 @@ app.post("/addIncomingInvoice", (req, res) => {
             invoice_info.typeOfPayment,
             0,
             invoice_info.total_value,
+            invoice_info.invoiceFile,
         ],
         function (err) {
             if (err) {
@@ -328,6 +347,26 @@ app.post("/addClients", (req, res) => {
             client_info.eik,
             0,
         ],
+        function (err) {
+            if (err) {
+                console.error("Error inserting data:", err);
+                return res.status(500).send("Error inserting invoice");
+            }
+
+            console.log(`Data inserted successfully with ID: ${this.lastID}`);
+
+            // Send response back after processing
+            res.end(JSON.stringify({ done: true }));
+        }
+    );
+});
+
+app.post("/addEmployee", (req, res) => {
+    let employee_info = req.body.employees;
+
+    db.run(
+        "INSERT INTO employees (name, salary, insurance, tax, additionalPay) VALUES (?, ?, ?, ?, ?)",
+        [employee_info.name, employee_info.salary, employee_info.insurance, employee_info.tax, employee_info.additionalPay],
         function (err) {
             if (err) {
                 console.error("Error inserting data:", err);
